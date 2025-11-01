@@ -8,21 +8,10 @@
   <h3>Укажите время смены</h3>
   <input type="time" id="start" value="09:00">
   <input type="time" id="end" value="18:00">
-  <button id="send">✅ Готово</button>
-
-  <script>
-    Telegram.WebApp.MainButton.hide();
-    const urlParams = new URLSearchParams(window.location.search);
-    const date = urlParams.get('date');
-
-    document.getElementById('send').onclick = () => {
-      Telegram.WebApp.sendData(JSON.stringify({
-        start: document.getElementById('start').value,
-        end: document.getElementById('end').value,
-        date: date
-      }));
-      Telegram.WebApp.close();
-    };
-  </script>
+  <button onclick="
+    const d = new URLSearchParams(location.search).get('date');
+    Telegram.WebApp.sendData(JSON.stringify({start: start.value, end: end.value, date: d}));
+    Telegram.WebApp.close();
+  ">✅ Готово</button>
 </body>
 </html>

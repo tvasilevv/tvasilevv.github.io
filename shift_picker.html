@@ -7,76 +7,94 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       padding: 20px;
-      max-width: 500px;
-      margin: 0 auto;
+      background: #f5f5f5;
+      margin: 0;
     }
-    .form-group {
-      margin-bottom: 20px;
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h3 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+    .time-inputs {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .time-input {
+      flex: 1;
     }
     label {
       display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #555;
     }
     input[type="time"] {
       width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
+      padding: 12px;
+      border: 1px solid #ddd;
       border-radius: 8px;
       font-size: 16px;
+      background: #fafafa;
     }
     button {
       width: 100%;
-      padding: 12px;
-      background-color: #3498db;
+      padding: 14px;
+      background: #4CAF50;
       color: white;
       border: none;
       border-radius: 8px;
       font-size: 16px;
+      font-weight: bold;
       cursor: pointer;
     }
     button:hover {
-      background-color: #2980b9;
+      background: #45a049;
     }
   </style>
 </head>
 <body>
-  <h3>Укажите время смены</h3>
+  <div class="container">
+    <h3>Укажите время смены</h3>
 
-  <div class="form-group">
-    <label for="start">Начало смены</label>
-    <input type="time" id="start" value="07:00">
+    <div class="time-inputs">
+      <div class="time-input">
+        <label for="start">Начало</label>
+        <input type="time" id="start" value="09:00">
+      </div>
+      <div class="time-input">
+        <label for="end">Конец</label>
+        <input type="time" id="end" value="18:00">
+      </div>
+    </div>
+
+    <button id="send">✅ Готово</button>
   </div>
-
-  <div class="form-group">
-    <label for="end">Окончание смены</label>
-    <input type="time" id="end" value="18:00">
-  </div>
-
-  <button id="send">✅ Готово</button>
 
   <script>
-    // Скрываем mainButton Telegram (нижнюю кнопку)
-    if (Telegram?.WebApp) {
-      Telegram.WebApp.MainButton.hide(); // 👈 Это ключевая строка!
-    }
+    // Скрываем стандартную нижнюю кнопку Telegram WebApp
+    Telegram.WebApp.MainButton.hide();
 
     document.getElementById('send').addEventListener('click', () => {
       const start = document.getElementById('start').value;
       const end = document.getElementById('end').value;
 
       if (!start || !end) {
-        alert("Пожалуйста, укажите оба времени.");
+        alert('Пожалуйста, укажите оба времени.');
         return;
       }
 
-      // Отправляем данные в бота
       Telegram.WebApp.sendData(JSON.stringify({ start, end }));
-
-      // Можно дополнительно закрыть Web App (опционально)
-      // Telegram.WebApp.close();
     });
   </script>
 </body>

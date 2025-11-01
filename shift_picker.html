@@ -202,15 +202,13 @@ async def show_matches(update: Update, user):
 
 async def handle_calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    # Не вызываем query.answer() сразу — сделаем это позже с web_app
+    await query.answer()
     data = query.data
 
     if data == "ignore":
-        await query.answer()
         return
 
     if data.startswith("cal-prev-") or data.startswith("cal-next-"):
-        await query.answer()
         parts = data.split("-")
         year, month = int(parts[2]), int(parts[3])
         if data.startswith("cal-prev-"):
@@ -235,14 +233,24 @@ async def handle_calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         WEB_APP_URL = "https://tvasilevv.github.io/shift_picker.html"
 
-        # 🔥 Открываем Web App сразу после выбора даты
-        await query.answer(
-            text="Выберите время смены",
-            web_app=WebAppInfo(url=WEB_APP_URL)
+        keyboard = [
+            [InlineKeyboardButton("🕗 Указать время смены", web_app=WebAppInfo(url=WEB_APP_URL))],
+            [InlineKeyboardButton("« Вернуться к календарю", callback_data=f"cal-back-{date_str}")]
+        ]
+        await query.edit_message_text(
+            text=f"📆 Выбрана дата: {date_str}\nНажмите кнопку, чтобы выбрать время:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif data.startswith("cal-back-"):
+        date_str = data.split("-", 2)[2]
+        y, m, _ = map(int, date_str.split("-"))
+        await query.edit_message_text(
+            "Выберите даты в календаре:",
+            reply_markup=create_calendar(context.user_data, y, m)
         )
 
     elif data == "cal-done":
-        await query.answer()
         schedule = context.user_data.get('schedule', {})
         if not schedule:
             await query.edit_message_text("❌ Вы не добавили ни одной смены.")

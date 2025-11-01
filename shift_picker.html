@@ -99,10 +99,12 @@
   </div>
 
   <script>
-    // Скрываем системную кнопку Telegram (нижнюю)
-    if (Telegram?.WebApp) {
-      Telegram.WebApp.MainButton.hide();
-    }
+    // Скрываем системную кнопку Telegram
+    Telegram.WebApp.MainButton.hide();
+
+    // Получаем дату из URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedDate = urlParams.get('date');
 
     document.getElementById('send').addEventListener('click', () => {
       const start = document.getElementById('start').value;
@@ -113,10 +115,18 @@
         return;
       }
 
-      // Отправляем данные в бота
-      Telegram.WebApp.sendData(JSON.stringify({ start, end }));
+      if (!selectedDate) {
+        alert('Не удалось определить дату.');
+        return;
+      }
 
-      // Закрываем Web App через небольшую задержку
+      // Отправляем данные + дату
+      Telegram.WebApp.sendData(JSON.stringify({ 
+        start, 
+        end,
+        date: selectedDate 
+      }));
+
       setTimeout(() => {
         Telegram.WebApp.close();
       }, 300);

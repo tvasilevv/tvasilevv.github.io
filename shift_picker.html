@@ -2,12 +2,100 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Выбор смены</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+      margin: 0;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h3 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+    .time-inputs {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .time-input {
+      flex: 1;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #555;
+    }
+    input[type="time"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      background: #fafafa;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+  </style>
 </head>
 <body>
-  <h3>Укажите время смены</h3>
-  <input type="time" id="start" value="09:00">
-  <input type="time" id="end" value="18:00">
-  <button onclick="const d=new URLSearchParams(location.search).get('date');Telegram.WebApp.sendData(JSON.stringify({start:start.value,end:end.value,date:d}));Telegram.WebApp.close();">✅ Готово</button>
+  <div class="container">
+    <h3>Укажите время смены</h3>
+
+    <div class="time-inputs">
+      <div class="time-input">
+        <label for="start">Начало</label>
+        <input type="time" id="start" value="09:00">
+      </div>
+      <div class="time-input">
+        <label for="end">Конец</label>
+        <input type="time" id="end" value="18:00">
+      </div>
+    </div>
+
+    <button id="send">✅ Готово</button>
+  </div>
+
+  <script>
+    // Скрываем стандартную нижнюю кнопку Telegram WebApp
+    Telegram.WebApp.MainButton.hide();
+
+    document.getElementById('send').addEventListener('click', () => {
+      const start = document.getElementById('start').value;
+      const end = document.getElementById('end').value;
+
+      if (!start || !end) {
+        alert('Пожалуйста, укажите оба времени.');
+        return;
+      }
+
+      Telegram.WebApp.sendData(JSON.stringify({ start, end }));
+    });
+  </script>
 </body>
 </html>

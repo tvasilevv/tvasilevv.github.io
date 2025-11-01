@@ -99,7 +99,7 @@
   </div>
 
   <script>
-    // Скрываем системную кнопку Telegram
+    // Скрываем системную кнопку Telegram (нижнюю)
     Telegram.WebApp.MainButton.hide();
 
     // Получаем дату из URL
@@ -120,13 +120,14 @@
         return;
       }
 
-      // Отправляем данные + дату
+      // Отправляем данные: время + дата
       Telegram.WebApp.sendData(JSON.stringify({ 
         start, 
         end,
         date: selectedDate 
       }));
 
+      // Закрываем Web App через короткую задержку
       setTimeout(() => {
         Telegram.WebApp.close();
       }, 300);

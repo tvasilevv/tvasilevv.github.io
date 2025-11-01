@@ -1,101 +1,302 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Выбор смены</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding: 20px;
-      background: #f5f5f5;
-      margin: 0;
-    }
-    .container {
-      max-width: 400px;
-      margin: 0 auto;
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    h3 {
-      margin-top: 0;
-      color: #333;
-      text-align: center;
-    }
-    .time-inputs {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .time-input {
-      flex: 1;
-    }
-    label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 14px;
-      color: #555;
-    }
-    input[type="time"] {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 16px;
-      background: #fafafa;
-    }
-    button {
-      width: 100%;
-      padding: 14px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h3>Укажите время смены</h3>
+import logging
+import sqlite3
+import json
+from datetime import datetime
+import calendar
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    CallbackQueryHandler,
+    filters
+)
 
-    <div class="time-inputs">
-      <div class="time-input">
-        <label for="start">Начало</label>
-        <input type="time" id="start" value="09:00">
-      </div>
-      <div class="time-input">
-        <label for="end">Конец</label>
-        <input type="time" id="end" value="18:00">
-      </div>
-    </div>
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-    <button id="send">✅ Готово</button>
-  </div>
 
-  <script>
-    // Скрываем стандартную нижнюю кнопку Telegram WebApp
-    Telegram.WebApp.MainButton.hide();
+def init_db():
+    conn = sqlite3.connect('schedules.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS schedules (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            schedule TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-    document.getElementById('send').addEventListener('click', () => {
-      const start = document.getElementById('start').value;
-      const end = document.getElementById('end').value;
 
-      if (!start || !end) {
-        alert('Пожалуйста, укажите оба времени.');
-        return;
-      }
+def save_schedule(user_id: int, username: str, schedule: dict):
+    conn = sqlite3.connect('schedules.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR REPLACE INTO schedules (user_id, username, schedule) VALUES (?, ?, ?)",
+        (user_id, username, json.dumps(schedule, ensure_ascii=False))
+    )
+    conn.commit()
+    conn.close()
 
-      Telegram.WebApp.sendData(JSON.stringify({ start, end }));
-    });
-  </script>
-</body>
-</html>
+
+def load_schedule(user_id: int) -> dict:
+    conn = sqlite3.connect('schedules.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT schedule FROM schedules WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except Exception as e:
+            logger.error(f"Ошибка загрузки расписания для {user_id}: {e}")
+            return {}
+    return {}
+
+
+def get_main_menu():
+    keyboard = [
+        ["📅 Отправить даты", "👥 Посмотреть совпадения"],
+        ["🗓️ Мой график", "🧹 Очистить данные"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def create_calendar(user_data, year=None, month=None):
+    now = datetime.now()
+    if year is None:
+        year = now.year
+    if month is None:
+        month = now.month
+
+    schedule = user_data.get('schedule', {})
+    selected_dates = set(schedule.keys())
+
+    keyboard = [
+        [
+            InlineKeyboardButton("«", callback_data=f"cal-prev-{year}-{month}"),
+            InlineKeyboardButton(f"{calendar.month_name[month]} {year}", callback_data="ignore"),
+            InlineKeyboardButton("»", callback_data=f"cal-next-{year}-{month}")
+        ],
+        [InlineKeyboardButton(day, callback_data="ignore") for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]]
+    ]
+
+    cal = calendar.monthcalendar(year, month)
+    for week in cal:
+        row = []
+        for day in week:
+            if day == 0:
+                row.append(InlineKeyboardButton(" ", callback_data="ignore"))
+            else:
+                date_str = f"{year}-{month:02d}-{day:02d}"
+                text = f"✅{day}" if date_str in selected_dates else str(day)
+                row.append(InlineKeyboardButton(text, callback_data=f"cal-day-{date_str}"))
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton("✅ Готово", callback_data="cal-done")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Привет! 👋 Я помогу найти коллег с совпадающими рабочими днями.\n\n"
+        "Выберите действие:",
+        reply_markup=get_main_menu()
+    )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text.strip()
+
+    if text == "📅 Отправить даты":
+        context.user_data['schedule'] = {}
+        await update.message.reply_text(
+            "Выберите даты в календаре:",
+            reply_markup=create_calendar(context.user_data)
+        )
+    elif text == "👥 Посмотреть совпадения":
+        await show_matches(update, user)
+    elif text == "🗓️ Мой график":
+        await show_my_schedule(update, user)
+    elif text == "🧹 Очистить данные":
+        conn = sqlite3.connect('schedules.db')
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM schedules WHERE user_id = ?", (user.id,))
+        conn.commit()
+        conn.close()
+        await update.message.reply_text("✅ Ваши данные удалены.")
+    else:
+        await update.message.reply_text("Пожалуйста, используйте кнопки меню.")
+
+
+async def show_my_schedule(update: Update, user):
+    schedule = load_schedule(user.id)
+    if not schedule:
+        await update.message.reply_text("Вы ещё не отправили свой график. Нажмите 📅 Отправить даты.")
+        return
+
+    lines = []
+    for date_str in sorted(schedule.keys()):
+        try:
+            nice_date = datetime.strptime(date_str, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except:
+            nice_date = date_str
+        lines.append(f"{nice_date}: {schedule[date_str]}")
+    await update.message.reply_text("🗓️ Ваш график:\n\n" + "\n".join(lines))
+
+
+async def show_matches(update: Update, user):
+    my_schedule = load_schedule(user.id)
+    if not my_schedule:
+        await update.message.reply_text("Сначала отправьте свой график!")
+        return
+
+    my_dates = set(my_schedule.keys())
+
+    conn = sqlite3.connect('schedules.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, username, schedule FROM schedules WHERE user_id != ?", (user.id,))
+    others = cursor.fetchall()
+    conn.close()
+
+    date_to_users = {}
+
+    for _, username, schedule_json in others:
+        if not schedule_json:
+            continue
+        try:
+            other_schedule = json.loads(schedule_json)
+        except:
+            continue
+        other_dates = set(other_schedule.keys())
+        common_dates = my_dates & other_dates
+        for d in common_dates:
+            if d not in date_to_users:
+                date_to_users[d] = []
+            display_name = f"@{username}" if username and not username.startswith("user_") else f"user_{_}"
+            shift_time = other_schedule[d]
+            date_to_users[d].append(f"{display_name} ({shift_time})")
+
+    if not date_to_users:
+        await update.message.reply_text("Пока совпадений нет. Попросите коллег добавить график!")
+        return
+
+    msg = "📅 Совпадающие дни:\n\n"
+    for d in sorted(date_to_users.keys()):
+        try:
+            nice_date = datetime.strptime(d, "%Y-%m-%d").strftime("%d.%m.%Y")
+        except:
+            nice_date = d
+        users_list = ", ".join(sorted(date_to_users[d]))
+        msg += f"📆 <b>{nice_date}</b>:\n   👤 {users_list}\n\n"
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
+async def handle_calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    # Не вызываем query.answer() сразу — сделаем это позже с web_app
+    data = query.data
+
+    if data == "ignore":
+        await query.answer()
+        return
+
+    if data.startswith("cal-prev-") or data.startswith("cal-next-"):
+        await query.answer()
+        parts = data.split("-")
+        year, month = int(parts[2]), int(parts[3])
+        if data.startswith("cal-prev-"):
+            if month == 1:
+                year -= 1
+                month = 12
+            else:
+                month -= 1
+        else:
+            if month == 12:
+                year += 1
+                month = 1
+            else:
+                month += 1
+        await query.edit_message_reply_markup(
+            reply_markup=create_calendar(context.user_data, year, month)
+        )
+
+    elif data.startswith("cal-day-"):
+        date_str = data.split("-", 2)[2]
+        context.user_data['pending_date'] = date_str
+
+        WEB_APP_URL = "https://tvasilevv.github.io/shift_picker.html"
+
+        # 🔥 Открываем Web App сразу после выбора даты
+        await query.answer(
+            text="Выберите время смены",
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+
+    elif data == "cal-done":
+        await query.answer()
+        schedule = context.user_data.get('schedule', {})
+        if not schedule:
+            await query.edit_message_text("❌ Вы не добавили ни одной смены.")
+            return
+
+        user = update.effective_user
+        save_schedule(user.id, user.username or f"user_{user.id}", schedule)
+        await query.edit_message_text(
+            f"✅ Сохранено {len(schedule)} смен!\n"
+            f"Теперь вы можете нажать 👥 Посмотреть совпадения или 🗓️ Мой график."
+        )
+
+
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    try:
+        data = json.loads(update.message.web_app_data.data)
+        start = data["start"]
+        end = data["end"]
+        shift_time = f"{start}–{end}"
+    except Exception as e:
+        await update.message.reply_text("❌ Ошибка в данных времени.")
+        logger.error(f"WebApp error: {e}")
+        return
+
+    date_str = context.user_data.get('pending_date')
+    if not date_str:
+        await update.message.reply_text("❌ Не найдена дата для смены.")
+        return
+
+    schedule = context.user_data.setdefault('schedule', {})
+    schedule[date_str] = shift_time
+
+    y, m, _ = map(int, date_str.split("-"))
+    await update.message.reply_text(
+        f"✅ Смена на {date_str} сохранена:\n{shift_time}",
+        reply_markup=create_calendar(context.user_data, y, m)
+    )
+    context.user_data.pop('pending_date', None)
+
+
+def main():
+    init_db()
+    TOKEN = "8437477599:AAFcAe6M1upQ44iFfXYFqElsMCOQj8cpb_Y"
+
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(handle_calendar))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+
+    print("✅ Бот запущен...")
+    app.run_polling()
+
+
+if __name__ == '__main__':
+    main()
